@@ -254,84 +254,93 @@ if st.session_state.halaman == "Dashboard":
             st.error(f"**STATUS SAAT INI**\n\n{status_saat_ini}")
 
 
-    # --- NILAI EVALUASI MODEL (DENGAN FILTER PER MODEL) ---
+# --- NILAI EVALUASI MODEL (DENGAN FILTER PER MODEL) ---
     try:
-        # Mengambil data metrik dari H+1 (hasil_model[1])
-        metrics_data = hasil_model[1].get('metrics', {})
+        st.markdown("##### 📊 Evaluasi Kinerja Model")
         
-        if isinstance(metrics_data, dict) and metrics_data:
-            st.markdown("##### 📊 Evaluasi Kinerja Model")
+        # Membuat 3 Tab untuk metrik masing-masing hari prediksi
+        tab_h1, tab_h2, tab_h3 = st.tabs(["Prediksi H+1", "Prediksi H+2", "Prediksi H+3"])
+        
+        # 1. Tentukan kata kunci filter berdasarkan model yang dipilih di UI
+        if model_pilih == "SVR":
+            keyword_aktif = ["svr"]
+        elif model_pilih == "Quantile Regression":
+            keyword_aktif = ["qr", "quantile"]
+        elif model_pilih == "Generalized Additive Models":
+            keyword_aktif = ["gam", "generalized"]
+        else:
+            keyword_aktif = []
+
+        # Fungsi dinamis untuk memproses dan menampilkan metrik per hari
+        def tampilkan_metrik_per_hari(hari, wadah_tab):
+            # Ambil metrik berdasarkan index hari (1, 2, atau 3)
+            metrics_data = hasil_model[hari].get('metrics', {})
             
-            # 1. Tentukan kata kunci filter berdasarkan model yang dipilih di UI
-            if model_pilih == "SVR":
-                keyword_aktif = ["svr"]
-            elif model_pilih == "Quantile Regression":
-                keyword_aktif = ["qr", "quantile"]
-            elif model_pilih == "Generalized Additive Models":
-                keyword_aktif = ["gam", "generalized"]
-            else:
-                keyword_aktif = []
-
-            # 2. Meratakan dictionary (flat-map)
-            flat_metrics = {}
-            for k, v in metrics_data.items():
-                if isinstance(v, dict):
-                    for sub_k, sub_v in v.items():
-                        flat_metrics[f"{k}_{sub_k}"] = sub_v
-                else:
-                    flat_metrics[k] = v
+            if isinstance(metrics_data, dict) and metrics_data:
+                # 2. Meratakan dictionary (flat-map)
+                flat_metrics = {}
+                for k, v in metrics_data.items():
+                    if isinstance(v, dict):
+                        for sub_k, sub_v in v.items():
+                            flat_metrics[f"{k}_{sub_k}"] = sub_v
+                    else:
+                        flat_metrics[k] = v
+                        
+                # 3. Proses Penyaringan: Hanya ambil metrik yang sesuai dengan model aktif
+                filtered_metrics = {}
+                for k, v in flat_metrics.items():
+                    k_lower = k.lower()
                     
-            # 3. Proses Penyaringan: Hanya ambil metrik yang sesuai dengan model aktif
-            filtered_metrics = {}
-            for k, v in flat_metrics.items():
-                k_lower = k.lower()
-                
-                # --- FILTER PENGECUALIAN TAMBAHAN ---
-                # Daftar kata kunci yang ingin disembunyikan dari layar
-                kata_kunci_dihapus = ["early_warn", "siaga", "coverage", "width"]
-                
-                # Jika nama metrik mengandung salah satu kata di atas, lewati!
-                if any(kata in k_lower for kata in kata_kunci_dihapus):
-                    continue
-                
-                # Cek apakah metrik ini milik model LAIN
-                is_other_model = False
-                daftar_model_lain = {
-                    "svr": ["svr"],
-                    "qr": ["qr", "quantile"],
-                    "gam": ["gam", "generalized"]
-                }
-                
-                for mod_name, kws in daftar_model_lain.items():
-                    if any(kw in k_lower for kw in kws):
-                        if not any(kw in model_pilih.lower() for kw in kws) and not (model_pilih == "Quantile Regression" and mod_name == "qr") and not (model_pilih == "Generalized Additive Models" and mod_name == "gam"):
-                            is_other_model = True
-                            break
-                
-                if any(kw in k_lower for kw in keyword_aktif) or not is_other_model:
-                    filtered_metrics[k] = v
+                    # Filter pengecualian tambahan
+                    kata_kunci_dihapus = ["early_warn", "siaga", "coverage", "width"]
+                    if any(kata in k_lower for kata in kata_kunci_dihapus):
+                        continue
+                    
+                    # Cek apakah metrik ini milik model LAIN
+                    is_other_model = False
+                    daftar_model_lain = {
+                        "svr": ["svr"],
+                        "qr": ["qr", "quantile"],
+                        "gam": ["gam", "generalized"]
+                    }
+                    
+                    for mod_name, kws in daftar_model_lain.items():
+                        if any(kw in k_lower for kw in kws):
+                            if not any(kw in model_pilih.lower() for kw in kws) and not (model_pilih == "Quantile Regression" and mod_name == "qr") and not (model_pilih == "Generalized Additive Models" and mod_name == "gam"):
+                                is_other_model = True
+                                break
+                    
+                    if any(kw in k_lower for kw in keyword_aktif) or not is_other_model:
+                        filtered_metrics[k] = v
 
-            # 4. Menampilkan metrik hasil filter ke dalam grid (Maksimal 4 kolom per baris)
-            if filtered_metrics:
-                keys = list(filtered_metrics.keys())
-                for i in range(0, len(keys), 4):
-                    cols = st.columns(4)
-                    for j in range(4):
-                        if i + j < len(keys):
-                            k = keys[i + j]
-                            v = filtered_metrics[k]
-                            
-                            if isinstance(v, (int, float, np.floating)):
-                                val_str = f"{v:.3f}"
-                            else:
-                                val_str = str(v)
+                # 4. Menampilkan metrik hasil filter ke dalam grid tab
+                if filtered_metrics:
+                    keys = list(filtered_metrics.keys())
+                    for i in range(0, len(keys), 4):
+                        cols = wadah_tab.columns(4)
+                        for j in range(4):
+                            if i + j < len(keys):
+                                k = keys[i + j]
+                                v = filtered_metrics[k]
                                 
-                            label_bersih = str(k).upper().replace("_", " ")
-                            cols[j].metric(label=label_bersih, value=val_str)
+                                if isinstance(v, (int, float, np.floating)):
+                                    val_str = f"{v:.3f}"
+                                else:
+                                    val_str = str(v)
+                                    
+                                label_bersih = str(k).upper().replace("_", " ")
+                                cols[j].metric(label=label_bersih, value=val_str)
+                else:
+                    wadah_tab.info("Tidak ada metrik evaluasi khusus untuk model ini.")
             else:
-                st.info("Tidak ada metrik evaluasi khusus untuk model ini.")
+                wadah_tab.info(f"Data metrik untuk H+{hari} belum tersedia di dalam file.")
+
+        # Memanggil fungsi untuk merender metrik di masing-masing tab
+        tampilkan_metrik_per_hari(1, tab_h1)
+        tampilkan_metrik_per_hari(2, tab_h2)
+        tampilkan_metrik_per_hari(3, tab_h3)
                 
-            st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown("<br>", unsafe_allow_html=True)
     except Exception as e:
         pass
 
