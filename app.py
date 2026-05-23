@@ -117,7 +117,8 @@ if st.session_state.halaman == "Dashboard":
             "TANGGAL *", 
             value=datetime.date(2025, 12, 3),
             min_value=datetime.date(2022, 1, 13), 
-            max_value=datetime.date(2025, 12, 31)
+            max_value=datetime.date(2025, 12, 31),
+            help="Pilih tanggal yang ingin diprediksi 1-3 hari ke depan"
         )
         
     with col3:
@@ -232,18 +233,22 @@ if st.session_state.halaman == "Dashboard":
         st.error(f"Terjadi kesalahan saat mengekstrak isi model: {e}")
         st.stop()
 
-    # --- METRICS CARDS ---
+# --- METRICS CARDS ---
     st.markdown("<br>", unsafe_allow_html=True)
-    m1, m2, m3, m4, m5 = st.columns([1, 1, 1, 1, 1.5])
+    # Ubah menjadi 4 kolom dengan lebar proporsional
+    m1, m2, m3, m4 = st.columns(4)
+
+    # Memformat tanggal
+    tgl_terkini = tanggal_pilih.strftime("%d %b %Y")
+    tgl_h1 = dates_future[0].strftime("%d %b %Y")
+    tgl_h2 = dates_future[1].strftime("%d %b %Y")
+    tgl_h3 = dates_future[2].strftime("%d %b %Y")
+
     with m1:
-        st.metric(label="TMA TERKINI", value=f"{tma_terkini} cm", delta="Aktual")
-    with m2:
-        st.metric(label="PREDIKSI +1 HARI", value=f"{pred_h1} cm", delta=f"{model_pilih}", delta_color="off")
-    with m3:
-        st.metric(label="PREDIKSI +2 HARI", value=f"{pred_h2} cm", delta=f"{model_pilih}", delta_color="off")
-    with m4:
-        st.metric(label="PREDIKSI +3 HARI", value=f"{pred_h3} cm", delta=f"{model_pilih}", delta_color="off")
-    with m5:
+        st.markdown(f"<div style='font-size: 14px; color: gray; margin-bottom: -10px;'>TMA TERKINI<br><b>{tgl_terkini}</b></div>", unsafe_allow_html=True)
+        st.metric(label="hidden_1", value=f"{tma_terkini} cm", delta="Aktual", label_visibility="collapsed")
+        
+        # Menambahkan kembali tulisan STATUS SAAT INI di dalam alert box
         if "Normal" in status_saat_ini:
             st.success(f"**STATUS SAAT INI**\n\n{status_saat_ini}")
         elif "Siaga III" in status_saat_ini:
@@ -252,7 +257,18 @@ if st.session_state.halaman == "Dashboard":
             st.warning(f"**STATUS SAAT INI**\n\n{status_saat_ini}")
         else:
             st.error(f"**STATUS SAAT INI**\n\n{status_saat_ini}")
-
+    
+    with m2:
+        st.markdown(f"<div style='font-size: 14px; color: gray; margin-bottom: -10px;'>PREDIKSI +1 HARI<br><b>{tgl_h1}</b></div>", unsafe_allow_html=True)
+        st.metric(label="hidden_2", value=f"{pred_h1} cm", delta=f"{model_pilih}", delta_color="off", label_visibility="collapsed")
+    
+    with m3:
+        st.markdown(f"<div style='font-size: 14px; color: gray; margin-bottom: -10px;'>PREDIKSI +2 HARI<br><b>{tgl_h2}</b></div>", unsafe_allow_html=True)
+        st.metric(label="hidden_3", value=f"{pred_h2} cm", delta=f"{model_pilih}", delta_color="off", label_visibility="collapsed")
+    
+    with m4:
+        st.markdown(f"<div style='font-size: 14px; color: gray; margin-bottom: -10px;'>PREDIKSI +3 HARI<br><b>{tgl_h3}</b></div>", unsafe_allow_html=True)
+        st.metric(label="hidden_4", value=f"{pred_h3} cm", delta=f"{model_pilih}", delta_color="off", label_visibility="collapsed")
 
 # --- NILAI EVALUASI MODEL (DENGAN FILTER PER MODEL) ---
     try:
@@ -344,6 +360,13 @@ if st.session_state.halaman == "Dashboard":
     except Exception as e:
         pass
 
+# --- MENCARI DATA AKTUAL MASA DEPAN (JIKA ADA) ---
+    # Filter df_history untuk mencari apakah tanggal H+1, H+2, H+3 ada di dataset asli
+    df_future_actual = df_history[df_history['Tanggal_Date'].isin(dates_future)].sort_values('Tanggal')
+    
+    dates_actual_future = df_future_actual['Tanggal'].dt.date.tolist()
+    aktual_future = df_future_actual['Aktual'].tolist()
+
     # --- GRAFIK 1: PREDIKSI VS AKTUAL ---
     st.subheader(f"Grafik Prediksi vs Aktual Tinggi Muka Air ({lokasi})")
     st.caption(f"Satuan: cm — Model: {model_pilih} | Menampilkan riwayat hingga {tanggal_pilih.strftime('%d %b %Y')}")
@@ -355,8 +378,12 @@ if st.session_state.halaman == "Dashboard":
     plot_dates_past = dates_past[-limit_hari:]
     plot_aktual_past = aktual_past[-limit_hari:]
 
+    # Gabungkan data aktual masa lalu dengan data aktual masa depan (jika tersedia)
+    plot_dates_aktual_combined = plot_dates_past + dates_actual_future
+    plot_aktual_combined = plot_aktual_past + aktual_future
+
     fig1.add_trace(go.Scatter(
-        x=plot_dates_past, y=plot_aktual_past, 
+        x=plot_dates_aktual_combined, y=plot_aktual_combined, 
         mode='lines+markers', name='Aktual',
         line=dict(color='#1f77b4', width=3),
         marker=dict(size=6)
@@ -393,9 +420,13 @@ if st.session_state.halaman == "Dashboard":
 
     fig1_full = go.Figure()
 
+    # Gabungkan data aktual masa lalu keseluruhan dengan data aktual masa depan (jika tersedia)
+    dates_aktual_full_combined = dates_past + dates_actual_future
+    aktual_full_combined = aktual_past + aktual_future
+
     # 1. Garis Aktual Keseluruhan (Biru)
     fig1_full.add_trace(go.Scatter(
-        x=dates_past, y=aktual_past, 
+        x=dates_aktual_full_combined, y=aktual_full_combined, 
         mode='lines', name='Aktual',
         line=dict(color='#1f77b4', width=1.5)
     ))
@@ -862,24 +893,30 @@ elif st.session_state.halaman == "Metode Prediksi":
 
     # Data dummy untuk ilustrasi perbandingan performa (bisa diganti dengan data asli jika ada)
     models = ["SVR", "Quantile Reg.", "GAM"]
-    rmse_vals = [12.5, 15.8, 13.2] # Contoh RMSE
-    mae_vals = [9.8, 11.2, 10.1]   # Contoh MAE
+    rmse_vals = [12.5, 15.8, 13.2] # Contoh RMSE (cm)
+    mae_vals = [9.8, 11.2, 10.1]   # Contoh MAE (cm)
+    mape_vals = [8.5, 12.4, 9.3]   # Contoh MAPE (%)
+    r2_vals = [0.89, 0.75, 0.84]   # Contoh R2 (Skala 0-1)
 
     fig_compare = go.Figure()
+    
+    # Trace untuk masing-masing metrik
     fig_compare.add_trace(go.Bar(x=models, y=rmse_vals, name='RMSE (Lower is Better)', marker_color='#1f77b4'))
     fig_compare.add_trace(go.Bar(x=models, y=mae_vals, name='MAE (Lower is Better)', marker_color='#ff7f0e'))
+    fig_compare.add_trace(go.Bar(x=models, y=mape_vals, name='MAPE (Lower is Better)', marker_color='#d62728'))  # Warna Merah
+    fig_compare.add_trace(go.Bar(x=models, y=r2_vals, name='R² (Higher is Better)', marker_color='#2ca02c'))   # Warna Hijau
 
     fig_compare.update_layout(
         barmode='group',
         plot_bgcolor="rgba(0,0,0,0)",
         xaxis=dict(showgrid=False),
-        yaxis=dict(showgrid=True, gridcolor='lightgray', title='Nilai Error (cm)'),
+        yaxis=dict(showgrid=True, gridcolor='lightgray', title='Nilai Metrik Evaluasi'),
         margin=dict(l=20, r=20, t=20, b=20),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
     )
     st.plotly_chart(fig_compare, use_container_width=True)
 
-    st.success("ℹ️ **Kesimpulan:** Model **SVR** cenderung unggul dalam akurasi titik, sementara **Quantile Regression** memberikan wawasan terbaik untuk kondisi ekstrem (banjir), dan **GAM** memberikan penjelasan terbaik mengenai kontribusi tiap variabel terhadap kenaikan air.")
+    st.success("ℹ️ **Kesimpulan:** Berdasarkan hasil evaluasi, ketiga metode ini memiliki keunggulan yang saling melengkapi dalam memantau debit air. Model **SVR** cenderung unggul dalam memprediksi akurasi titik (*point estimate*) secara presisi, sementara **Quantile Regression** memberikan wawasan batas atas yang sangat krusial untuk memetakan risiko pada kondisi ekstrem (siaga banjir), dan **GAM** memberikan interpretasi paling transparan mengenai pola tren historis yang berkontribusi terhadap fluktuasi kenaikan air. Perbandingan ketiga model ini secara bersamaan menghasilkan sistem peringatan dini yang lebih utuh dan dapat diandalkan untuk mendukung langkah mitigasi di wilayah Jakarta.")
 
 # 4. HALAMAN PANDUAN MITIGASI
 elif st.session_state.halaman == "Panduan Mitigasi":
