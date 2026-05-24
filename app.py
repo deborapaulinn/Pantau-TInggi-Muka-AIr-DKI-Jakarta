@@ -605,50 +605,6 @@ elif st.session_state.halaman == "Riwayat Data":
                 file_name=f"riwayat_tma_{periode_pilih.replace(' ', '_')}.csv", 
                 mime="text/csv"
             )
-            
-            # --- 4. HASIL VISUALISASI DI BAWAH TABEL RIWAYAT DATA ---
-            st.markdown("---")
-            st.subheader("📉 Visualisasi Tren Riwayat Data vs Prediksi")
-            st.caption(f"Perbandingan grafik data Aktual vs Prediksi Model **{model_pilih_riwayat}** pada periode **{periode_pilih}**")
-            
-            # Filter khusus pintu air untuk grafik agar tidak tumpang tindih ribuan baris data
-            pintu_grafik = st.selectbox("PILIH PINTU AIR UNTUK VISUALISASI GRAFIK", options=list(pintu_air.values()))
-            df_grafik = df_all[df_all['Pintu Air'] == pintu_grafik].sort_values(by='Tanggal')
-            
-            if not df_grafik.empty:
-                fig_riwayat = go.Figure()
-                
-                # Garis Aktual (Biru)
-                fig_riwayat.add_trace(go.Scatter(
-                    x=df_grafik['Tanggal'], y=df_grafik['TMA Aktual (cm)'],
-                    mode='lines', name='TMA Aktual', line=dict(color='#1f77b4', width=1.5)
-                ))
-                
-                # Garis Prediksi Model (Orange)
-                fig_riwayat.add_trace(go.Scatter(
-                    x=df_grafik['Tanggal'], y=df_grafik['TMA Prediksi (cm)'],
-                    mode='lines', name=f'Prediksi ({model_pilih_riwayat})', 
-                    line=dict(color='#ff7f0e', width=1.5, dash='dash')
-                ))
-                
-                # Ambang Batas Siaga Lokasi Terpilih
-                batas_grafik = ambang_batas[pintu_grafik]
-                fig_riwayat.add_hline(y=batas_grafik["siaga1"], line_dash="dash", line_color="red", annotation_text="Siaga I")
-                fig_riwayat.add_hline(y=batas_grafik["siaga2"], line_dash="dash", line_color="orange", annotation_text="Siaga II")
-                fig_riwayat.add_hline(y=batas_grafik["siaga3"], line_dash="dash", line_color="#e6c200", annotation_text="Siaga III")
-                
-                fig_riwayat.update_layout(
-                    plot_bgcolor="rgba(0,0,0,0)",
-                    xaxis=dict(showgrid=True, gridcolor='lightgray'),
-                    yaxis=dict(showgrid=True, gridcolor='lightgray', title='Tinggi Muka Air (cm)'),
-                    margin=dict(l=20, r=20, t=20, b=20),
-                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-                )
-                st.plotly_chart(fig_riwayat, use_container_width=True)
-            else:
-                st.warning("⚠️ Tidak ada data historis yang tersedia untuk grafik pada kombinasi filter ini.")
-        else:
-            st.error("⚠️ Gagal mengekstrak data. Pastikan file model `.pkl` berada di folder `models/`.")
 
 # 3. HALAMAN METODE PREDIKSI
 elif st.session_state.halaman == "Metode Prediksi":
