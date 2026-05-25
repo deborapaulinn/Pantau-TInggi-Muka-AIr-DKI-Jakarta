@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
@@ -8,6 +9,19 @@ import os
 
 # --- KONFIGURASI HALAMAN ---
 st.set_page_config(page_title="Pantau Tinggi Muka Air", page_icon="💧", layout="wide")
+
+# --- SCRIPT AUTO-SCROLL KE ATAS ---
+components.html(
+    """
+    <script>
+        const body = window.parent.document.querySelector('.main');
+        if (body) {
+            body.scrollTo(0, 0);
+        }
+    </script>
+    """,
+    height=0
+)
 
 # --- DATA & KAMUS ---
 pintu_air = {
