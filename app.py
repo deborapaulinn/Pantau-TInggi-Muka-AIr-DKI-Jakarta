@@ -107,30 +107,28 @@ st.sidebar.button("Peta Lokasi", use_container_width=True, type="primary" if st.
 # --- ANCHOR ATAS + SCROLL TRIGGER (diletakkan sebelum konten halaman agar scrollIntoView bekerja) ---
 st.markdown('<div id="halaman-paling-atas" style="height:0;margin:0;padding:0;line-height:0;"></div>', unsafe_allow_html=True)
 if _halaman_berubah:
+    _scroll_ts = int(datetime.datetime.now().timestamp() * 1000)
     components.html(
-        """
+        f"""
         <script>
-            function scrollKeAtas() {
-                // Cara 1: pakai anchor yang ada di atas konten halaman
+            // id:{_scroll_ts} — nilai unik ini memaksa React remount iframe setiap ganti halaman
+            function scrollKeAtas() {{
                 var anchor = window.parent.document.getElementById('halaman-paling-atas');
-                if (anchor) {
-                    anchor.scrollIntoView({ behavior: 'instant', block: 'start' });
-                }
-                // Cara 2: scroll container Streamlit secara langsung (fallback)
+                if (anchor) {{
+                    anchor.scrollIntoView({{ behavior: 'instant', block: 'start' }});
+                }}
                 var selectors = [
                     '[data-testid="stAppViewContainer"]',
                     '[data-testid="stMain"]',
                     '.main',
                     'section.main'
                 ];
-                selectors.forEach(function(sel) {
+                selectors.forEach(function(sel) {{
                     var el = window.parent.document.querySelector(sel);
-                    if (el) { el.scrollTop = 0; }
-                });
-                // Cara 3: scroll window (fallback terakhir)
+                    if (el) {{ el.scrollTop = 0; }}
+                }});
                 window.parent.scrollTo(0, 0);
-            }
-            // Eksekusi segera + retry agar tidak terlewat saat React masih merender
+            }}
             scrollKeAtas();
             setTimeout(scrollKeAtas, 80);
             setTimeout(scrollKeAtas, 250);
