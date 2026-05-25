@@ -10,18 +10,40 @@ import os
 # --- KONFIGURASI HALAMAN ---
 st.set_page_config(page_title="Pantau Tinggi Muka Air", page_icon="💧", layout="wide")
 
-# --- SCRIPT AUTO-SCROLL KE ATAS ---
-components.html(
-    """
-    <script>
-        const body = window.parent.document.querySelector('.main');
-        if (body) {
-            body.scrollTo(0, 0);
-        }
-    </script>
-    """,
-    height=0
-)
+# --- SCROLL KE ATAS SAAT GANTI HALAMAN ---
+if "prev_page" not in st.session_state:
+    st.session_state.prev_page = ""
+ 
+if st.session_state.prev_page != st.session_state.get("halaman", "Dashboard"):
+    st.session_state.prev_page = st.session_state.get("halaman", "Dashboard")
+    components.html(
+        """
+        <script>
+            function scrollToTop() {
+                var selectors = [
+                    '[data-testid="stAppViewContainer"]',
+                    '[data-testid="block-container"]',
+                    '.main',
+                    'section.main'
+                ];
+                selectors.forEach(function(sel) {
+                    var el = window.parent.document.querySelector(sel);
+                    if (el) {
+                        el.scrollTop = 0;
+                        el.scrollTo({ top: 0, behavior: 'instant' });
+                    }
+                });
+                window.parent.document.documentElement.scrollTop = 0;
+                window.parent.document.body.scrollTop = 0;
+            }
+            scrollToTop();
+            setTimeout(scrollToTop, 80);
+            setTimeout(scrollToTop, 200);
+            setTimeout(scrollToTop, 500);
+        </script>
+        """,
+        height=0,
+    )
 
 # --- DATA & KAMUS ---
 pintu_air = {
