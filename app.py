@@ -887,11 +887,14 @@ elif st.session_state.halaman == "Metode Prediksi":
     st.markdown("<br>", unsafe_allow_html=True)
     st.subheader("📊 Visualisasi Efisiensi Prediksi")
     st.caption("Ilustrasi perbandingan tingkat kesalahan (error) relatif antar model berdasarkan data pengujian.")
-
+    st.caption("Root Mean Square Error (RMSE) : Metrik evaluasi yang digunakan untuk mengukur seberapa jauh penyimpangan antara nilai prediksi dari sebuah model dengan nilai data aktual di lapangan. Nilai RMSE yang lebih kecil menunjukkan tingkat akurasi prediksi yang lebih tinggi.")
+    st.caption("Mean Absolute Error (MAE) : Metrik evaluasi yang digunakan untuk mengukur rata-rata kesalahan absolut antara nilai prediksi dari sebuah model dengan nilai data aktual di lapangan. Nilai MAE yang lebih kecil menunjukkan tingkat akurasi prediksi yang lebih tinggi.")
+    st.caption("Mean Absolute Percentage Error (MAPE) : Metrik evaluasi yang digunakan untuk mengukur rata-rata kesalahan absolut dalam bentuk persentase antara nilai prediksi dari sebuah model dengan nilai data aktual di lapangan. Nilai MAPE yang lebih kecil menunjukkan tingkat akurasi prediksi yang lebih tinggi.")
+    st.caption("Coefficient of Determination (R²) : Metrik evaluasi yang digunakan untuk mengukur seberapa baik model dapat menjelaskan variasi dalam data aktual. Nilai R² yang lebih tinggi menunjukkan tingkat akurasi prediksi yang lebih tinggi.")
+    
     # Data dummy untuk ilustrasi perbandingan performa (bisa diganti dengan data asli jika ada)
     models = ["SVR", "Quantile Reg.", "GAM"]
     rmse_vals = [12.5, 15.8, 13.2] # Contoh RMSE (cm)
-    st.caption("Root Mean Square Error")
     mae_vals = [9.8, 11.2, 10.1]   # Contoh MAE (cm)
     mape_vals = [8.5, 12.4, 9.3]   # Contoh MAPE (%)
     r2_vals = [0.89, 0.75, 0.84]   # Contoh R2 (Skala 0-1)
