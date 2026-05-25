@@ -10,40 +10,11 @@ import os
 # --- KONFIGURASI HALAMAN ---
 st.set_page_config(page_title="Pantau Tinggi Muka Air", page_icon="💧", layout="wide")
 
-# --- SCROLL KE ATAS SAAT GANTI HALAMAN ---
+# --- DETEKSI PERGANTIAN HALAMAN ---
 if "prev_page" not in st.session_state:
     st.session_state.prev_page = ""
- 
-if st.session_state.prev_page != st.session_state.get("halaman", "Dashboard"):
-    st.session_state.prev_page = st.session_state.get("halaman", "Dashboard")
-    components.html(
-        """
-        <script>
-            function scrollToTop() {
-                var selectors = [
-                    '[data-testid="stAppViewContainer"]',
-                    '[data-testid="block-container"]',
-                    '.main',
-                    'section.main'
-                ];
-                selectors.forEach(function(sel) {
-                    var el = window.parent.document.querySelector(sel);
-                    if (el) {
-                        el.scrollTop = 0;
-                        el.scrollTo({ top: 0, behavior: 'instant' });
-                    }
-                });
-                window.parent.document.documentElement.scrollTop = 0;
-                window.parent.document.body.scrollTop = 0;
-            }
-            scrollToTop();
-            setTimeout(scrollToTop, 80);
-            setTimeout(scrollToTop, 200);
-            setTimeout(scrollToTop, 500);
-        </script>
-        """,
-        height=0,
-    )
+_halaman_berubah = (st.session_state.prev_page != st.session_state.get("halaman", "Dashboard"))
+st.session_state.prev_page = st.session_state.get("halaman", "Dashboard")
 
 # --- DATA & KAMUS ---
 pintu_air = {
@@ -132,6 +103,42 @@ st.sidebar.button("Riwayat Data", use_container_width=True, type="primary" if st
 st.sidebar.button("Metode Prediksi", use_container_width=True, type="primary" if st.session_state.halaman == "Metode Prediksi" else "secondary", on_click=ganti_halaman, args=("Metode Prediksi",))
 st.sidebar.button("Panduan Mitigasi", use_container_width=True, type="primary" if st.session_state.halaman == "Panduan Mitigasi" else "secondary", on_click=ganti_halaman, args=("Panduan Mitigasi",))
 st.sidebar.button("Peta Lokasi", use_container_width=True, type="primary" if st.session_state.halaman == "Peta Lokasi" else "secondary", on_click=ganti_halaman, args=("Peta Lokasi",))
+
+# --- ANCHOR ATAS + SCROLL TRIGGER (diletakkan sebelum konten halaman agar scrollIntoView bekerja) ---
+st.markdown('<div id="halaman-paling-atas" style="height:0;margin:0;padding:0;line-height:0;"></div>', unsafe_allow_html=True)
+if _halaman_berubah:
+    components.html(
+        """
+        <script>
+            function scrollKeAtas() {
+                // Cara 1: pakai anchor yang ada di atas konten halaman
+                var anchor = window.parent.document.getElementById('halaman-paling-atas');
+                if (anchor) {
+                    anchor.scrollIntoView({ behavior: 'instant', block: 'start' });
+                }
+                // Cara 2: scroll container Streamlit secara langsung (fallback)
+                var selectors = [
+                    '[data-testid="stAppViewContainer"]',
+                    '[data-testid="stMain"]',
+                    '.main',
+                    'section.main'
+                ];
+                selectors.forEach(function(sel) {
+                    var el = window.parent.document.querySelector(sel);
+                    if (el) { el.scrollTop = 0; }
+                });
+                // Cara 3: scroll window (fallback terakhir)
+                window.parent.scrollTo(0, 0);
+            }
+            // Eksekusi segera + retry agar tidak terlewat saat React masih merender
+            scrollKeAtas();
+            setTimeout(scrollKeAtas, 80);
+            setTimeout(scrollKeAtas, 250);
+            setTimeout(scrollKeAtas, 600);
+        </script>
+        """,
+        height=1,
+    )
 
 # 1. HALAMAN DASHBOARD UTAMA
 if st.session_state.halaman == "Dashboard":
