@@ -891,6 +891,7 @@ elif st.session_state.halaman == "Metode Prediksi":
     # Data dummy untuk ilustrasi perbandingan performa (bisa diganti dengan data asli jika ada)
     models = ["SVR", "Quantile Reg.", "GAM"]
     rmse_vals = [12.5, 15.8, 13.2] # Contoh RMSE (cm)
+    st.caption("Root Mean Square Error")
     mae_vals = [9.8, 11.2, 10.1]   # Contoh MAE (cm)
     mape_vals = [8.5, 12.4, 9.3]   # Contoh MAPE (%)
     r2_vals = [0.89, 0.75, 0.84]   # Contoh R2 (Skala 0-1)
