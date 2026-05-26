@@ -588,7 +588,6 @@ elif st.session_state.halaman == "Riwayat Data":
                         "Quantile Regression": "qr_results",
                         "Generalized Additive Models": "gam_results"
                     }
-                    t_key = key_map_riwayat[model_pilih_riwayat]
                     
                     pred_total = np.zeros(len(all_act))
                     if t_key in bundle and 1 in bundle[t_key]:
