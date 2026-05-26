@@ -535,17 +535,11 @@ elif st.session_state.halaman == "Riwayat Data":
     st.markdown("Halaman ini menampilkan tabel informasi riwayat data Tinggi Muka Air (TMA) seluruh pintu air di DKI Jakarta beserta hasil visualisasi model prediksi.")
     st.markdown("---")
 
-    # --- 1. FORM INPUT (PERIODE WAKTU & MODEL PREDIKSI) ---
-    col1, col2 = st.columns(2)
-    with col1:
-        periode_pilih = st.selectbox(
-            "PERIODE WAKTU", 
-            options=["Semua (2022-2025)", "2022", "2023", "2024", "2025"]
-        )
-    with col2:
-        model_pilih_riwayat = st.selectbox( 
-            key="model_riwayat"
-        )
+    # --- 1. FORM INPUT (PERIODE WAKTU) ---
+periode_pilih = st.selectbox(
+    "PERIODE WAKTU", 
+    options=["Semua (2022-2025)", "2022", "2023", "2024", "2025"]
+)
 
     # --- 2 & 3. PROSES PENGAMBILAN DATA & MENAMPILKAN TABEL ---
     st.subheader("📋 Tabel Informasi Riwayat TMA Seluruh Pintu Air")
