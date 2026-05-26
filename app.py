@@ -532,24 +532,19 @@ if st.session_state.halaman == "Dashboard":
 # 2. HALAMAN RIWAYAT DATA
 elif st.session_state.halaman == "Riwayat Data":
     st.title("📊 Riwayat Data Tinggi Muka Air")
-    st.markdown("Halaman ini menampilkan tabel informasi riwayat data Tinggi Muka Air (TMA) seluruh pintu air di DKI Jakarta beserta hasil visualisasi model prediksi.")
+    st.markdown("Halaman ini menampilkan tabel informasi riwayat data aktual Tinggi Muka Air (TMA) seluruh pintu air di DKI Jakarta.")
     st.markdown("---")
 
-    # --- 1. FORM INPUT (PERIODE WAKTU) ---
+    # --- 1. FORM INPUT (HANYA PERIODE WAKTU) ---
     periode_pilih = st.selectbox(
         "PERIODE WAKTU", 
         options=["Semua (2022-2025)", "2022", "2023", "2024", "2025"]
     )
 
-    # --- 2 & 3. PROSES PENGAMBILAN DATA & MENAMPILKAN TABEL ---
+    # --- 2. PROSES PENGAMBILAN DATA AKTUAL & MENAMPILKAN TABEL ---
     st.subheader("📋 Tabel Informasi Riwayat TMA Seluruh Pintu Air")
     
-    # 💡 CATATAN UNTUK ACUAN EXCEL:
-    # Jika nanti Anda ingin membaca langsung dari file Excel gabungan, kodenya tinggal diganti seperti ini:
-    # df_all = pd.read_excel("nama_file_excel_anda.xlsx")
-    
-    # Di bawah ini adalah sistem otomatis untuk mengekstrak data historis dari file .pkl seluruh pintu air:
-    with st.spinner("Mengkstrak data seluruh pintu air..."):
+    with st.spinner("Mengekstrak data seluruh pintu air..."):
         list_df = []
         
         # Fungsi pembongkar lokal untuk keamanan tipe data
@@ -577,32 +572,16 @@ elif st.session_state.halaman == "Riwayat Data":
                     te_dates = pd.to_datetime(hasil_svr[1]['test_index'])
                     all_d = list(t_dates) + list(te_dates)
                     
-                    # Gabungkan Aktual
+                    # Gabungkan Aktual Saja
                     tr_act = ekstrak_array_lokal(hasil_svr[1][kunci_train])
                     te_act = ekstrak_array_lokal(hasil_svr[1][kunci_test])
                     all_act = np.concatenate([tr_act, te_act])
                     
-                    # Ambil Prediksi Historis Sesuai Model Pilihan Grafik
-                    key_map_riwayat = {
-                        "SVR": "svr_results",
-                        "Quantile Regression": "qr_results",
-                        "Generalized Additive Models": "gam_results"
-                    }
-                    
-                    pred_total = np.zeros(len(all_act))
-                    if t_key in bundle and 1 in bundle[t_key]:
-                        k_p_tr = 'y_pred_tr' if 'y_pred_tr' in bundle[t_key][1] else 'pred_train'
-                        k_p_te = 'y_pred_te' if 'y_pred_te' in bundle[t_key][1] else 'pred_test'
-                        tr_pr = ekstrak_array_lokal(bundle[t_key][1][k_p_tr])
-                        te_pr = ekstrak_array_lokal(bundle[t_key][1][k_p_te])
-                        pred_total = np.concatenate([tr_pr, te_pr])
-                    
-                    # Buat DataFrame per pintu air
+                    # Buat DataFrame per pintu air (Hanya Tanggal, Pintu, Aktual)
                     df_pintu = pd.DataFrame({
                         'Tanggal': all_d,
                         'Pintu Air': lokasi_nama,
-                        'TMA Aktual (cm)': all_act,
-                        'TMA Prediksi (cm)': pred_total
+                        'TMA Aktual (cm)': all_act
                     })
                     list_df.append(df_pintu)
 
@@ -618,7 +597,7 @@ elif st.session_state.halaman == "Riwayat Data":
             # Urutkan berdasarkan tanggal terbaru
             df_all = df_all.sort_values(by=['Tanggal', 'Pintu Air'], ascending=[False, True])
             
-            # Buat tampilan tabel ringkas untuk informasi riwayat
+            # Buat tampilan tabel ringkas
             df_tabel_tampil = df_all[['Tanggal', 'Pintu Air', 'TMA Aktual (cm)']].copy()
             df_tabel_tampil['Tanggal'] = df_tabel_tampil['Tanggal'].dt.strftime('%Y-%m-%d')
             
@@ -629,12 +608,12 @@ elif st.session_state.halaman == "Riwayat Data":
             # Tampilkan tabel ke layar Streamlit
             st.dataframe(df_tabel_tampil, use_container_width=True, height=350)
             
-            # Tombol tambahan untuk download data tabel dalam bentuk CSV/Excel-ready
+            # Tombol tambahan untuk download data tabel
             csv_data = df_tabel_tampil.to_csv(index=False).encode('utf-8')
             st.download_button(
                 label="📥 Unduh Data Riwayat (CSV)", 
                 data=csv_data, 
-                file_name=f"riwayat_tma_{periode_pilih.replace(' ', '_')}.csv", 
+                file_name=f"riwayat_tma_aktual_{periode_pilih.replace(' ', '_')}.csv", 
                 mime="text/csv"
             )
 
