@@ -536,10 +536,10 @@ elif st.session_state.halaman == "Riwayat Data":
     st.markdown("---")
 
     # --- 1. FORM INPUT (PERIODE WAKTU) ---
-periode_pilih = st.selectbox(
-    "PERIODE WAKTU", 
-    options=["Semua (2022-2025)", "2022", "2023", "2024", "2025"]
-)
+    periode_pilih = st.selectbox(
+        "PERIODE WAKTU", 
+        options=["Semua (2022-2025)", "2022", "2023", "2024", "2025"]
+    )
 
     # --- 2 & 3. PROSES PENGAMBILAN DATA & MENAMPILKAN TABEL ---
     st.subheader("📋 Tabel Informasi Riwayat TMA Seluruh Pintu Air")
