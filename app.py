@@ -542,6 +542,10 @@ elif st.session_state.halaman == "Riwayat Data":
             "PERIODE WAKTU", 
             options=["Semua (2022-2025)", "2022", "2023", "2024", "2025"]
         )
+    with col2:
+        model_pilih_riwayat = st.selectbox( 
+            key="model_riwayat"
+        )
 
     # --- 2 & 3. PROSES PENGAMBILAN DATA & MENAMPILKAN TABEL ---
     st.subheader("📋 Tabel Informasi Riwayat TMA Seluruh Pintu Air")
