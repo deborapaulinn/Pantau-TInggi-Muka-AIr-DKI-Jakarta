@@ -330,11 +330,9 @@ if st.session_state.halaman == "Dashboard":
 
         # Fungsi dinamis untuk memproses dan menampilkan metrik per hari
         def tampilkan_metrik_per_hari(hari, wadah_tab):
-            # Ambil metrik berdasarkan index hari (1, 2, atau 3)
             metrics_data = hasil_model[hari].get('metrics', {})
             
             if isinstance(metrics_data, dict) and metrics_data:
-                # 2. Meratakan dictionary (flat-map)
                 flat_metrics = {}
                 for k, v in metrics_data.items():
                     if isinstance(v, dict):
@@ -343,17 +341,20 @@ if st.session_state.halaman == "Dashboard":
                     else:
                         flat_metrics[k] = v
                         
-                # 3. Proses Penyaringan: Hanya ambil metrik yang sesuai dengan model aktif
                 filtered_metrics = {}
                 for k, v in flat_metrics.items():
                     k_lower = k.lower()
                     
-                    # Filter pengecualian tambahan
-                    kata_kunci_dihapus = ["early_warn", "siaga", "coverage", "width"]
+                    # Kata kunci yang secara default difilter
+                    kata_kunci_dihapus = ["early_warn", "siaga"]
+                    
+                    # Jika model BUKAN Quantile Regression, filter out 'coverage' dan 'width'
+                    if model_pilih != "Quantile Regression":
+                        kata_kunci_dihapus.extend(["coverage", "width"])
+                        
                     if any(kata in k_lower for kata in kata_kunci_dihapus):
                         continue
                     
-                    # Cek apakah metrik ini milik model LAIN
                     is_other_model = False
                     daftar_model_lain = {
                         "svr": ["svr"],
@@ -370,6 +371,7 @@ if st.session_state.halaman == "Dashboard":
                     if any(kw in k_lower for kw in keyword_aktif) or not is_other_model:
                         filtered_metrics[k] = v
 
+
                 # 4. Menampilkan metrik hasil filter ke dalam grid tab
                 if filtered_metrics:
                     keys = list(filtered_metrics.keys())
@@ -380,12 +382,26 @@ if st.session_state.halaman == "Dashboard":
                                 k = keys[i + j]
                                 v = filtered_metrics[k]
                                 
+                                k_lower = str(k).lower()
+                                
+                                # --- BAGIAN FORMAT ANGKA YANG DIUBAH ---
                                 if isinstance(v, (int, float, np.floating)):
-                                    val_str = f"{v:.3f}"
+                                    if "coverage" in k_lower:
+                                        # Coverage dikali 100 dan format 2 angka di belakang koma + %
+                                        val_str = f"{(v * 100):.2f}%"
+                                    elif "mape" in k_lower:
+                                        # MAPE format 2 angka di belakang koma + %
+                                        val_str = f"{v:.2f}%"
+                                    else:
+                                        # Metrik lainnya (RMSE, MAE, R2, Interval Width) format 2 desimal
+                                        val_str = f"{v:.2f}"
                                 else:
                                     val_str = str(v)
+                                # ---------------------------------------
                                     
                                 label_bersih = str(k).upper().replace("_", " ")
+                                
+                                # Menampilkan Metrik
                                 cols[j].metric(label=label_bersih, value=val_str)
                 else:
                     wadah_tab.info("Tidak ada metrik evaluasi khusus untuk model ini.")
@@ -880,33 +896,81 @@ elif st.session_state.halaman == "Metode Prediksi":
 
     # --- 3. PERBANDINGAN DALAM BENTUK GRAFIK ---
     st.markdown("<br>", unsafe_allow_html=True)
-    st.subheader("📊 Visualisasi Efisiensi Prediksi")
-    st.caption("Ilustrasi perbandingan tingkat kesalahan (error) relatif antar model berdasarkan data pengujian.")
+    st.subheader("📊 Visualisasi Efisiensi Prediksi (Rata-rata Seluruh Pintu Air)")
+    st.caption("Ilustrasi perbandingan tingkat kesalahan (error) relatif antar model berdasarkan nilai rata-rata dari pengujian seluruh titik pemantauan.")
     st.caption("Root Mean Square Error (RMSE) : Metrik evaluasi yang digunakan untuk mengukur seberapa jauh penyimpangan antara nilai prediksi dari sebuah model dengan nilai data aktual di lapangan. Nilai RMSE yang lebih kecil menunjukkan tingkat akurasi prediksi yang lebih tinggi.")
     st.caption("Mean Absolute Error (MAE) : Metrik evaluasi yang digunakan untuk mengukur rata-rata kesalahan absolut antara nilai prediksi dari sebuah model dengan nilai data aktual di lapangan. Nilai MAE yang lebih kecil menunjukkan tingkat akurasi prediksi yang lebih tinggi.")
     st.caption("Mean Absolute Percentage Error (MAPE) : Metrik evaluasi yang digunakan untuk mengukur rata-rata kesalahan absolut dalam bentuk persentase antara nilai prediksi dari sebuah model dengan nilai data aktual di lapangan. Nilai MAPE yang lebih kecil menunjukkan tingkat akurasi prediksi yang lebih tinggi.")
     st.caption("Coefficient of Determination (R²) : Metrik evaluasi yang digunakan untuk mengukur seberapa baik model dapat menjelaskan variasi dalam data aktual. Nilai R² yang lebih tinggi menunjukkan tingkat akurasi prediksi yang lebih tinggi.")
     
-    # Data dummy untuk ilustrasi perbandingan performa (bisa diganti dengan data asli jika ada)
+    # -------------------------------------------------------------------------
+    # PENGAMBILAN METRIK EVALUASI AKTUAL
+    # -------------------------------------------------------------------------
+    avg_metrics = {
+        "SVR": {"rmse": [], "mae": [], "mape": [], "r2": []},
+        "Quantile Reg.": {"rmse": [], "mae": [], "mape": [], "r2": []},
+        "GAM": {"rmse": [], "mae": [], "mape": [], "r2": []}
+    }
+                   
+    model_keys_map = {"SVR": "svr_results", "Quantile Reg.": "qr_results", "GAM": "gam_results"}
+
+    def get_flat_metrics_for_chart(metrics_data):
+        flat_m = {}
+        if isinstance(metrics_data, dict):
+            for k, v in metrics_data.items():
+                if isinstance(v, dict):
+                    for sk, sv in v.items():
+                        flat_m[f"{k}_{sk}"] = sv
+                else:
+                    flat_m[k] = v
+        return flat_m
+
+    with st.spinner("Memproses perhitungan metrik evaluasi aktual..."):
+        for lokasi_nama in pintu_air.values():
+            bundle = load_model(lokasi_nama)
+            if bundle:
+                for mod_name, mod_key in model_keys_map.items():
+                    if mod_key in bundle:
+                        for hari in [1, 2, 3]:
+                            if hari in bundle[mod_key]:
+                                m_data = bundle[mod_key][hari].get('metrics', {})
+                                flat_m = get_flat_metrics_for_chart(m_data)
+                                
+                                for key_m, val_m in flat_m.items():
+                                    k_lower = str(key_m).lower()
+                                    if isinstance(val_m, (int, float, np.floating)):
+                                        if "rmse" in k_lower: 
+                                            avg_metrics[mod_name]["rmse"].append(val_m)
+                                        elif "mae" in k_lower: 
+                                            avg_metrics[mod_name]["mae"].append(val_m)
+                                        elif "r2" in k_lower or "r_squared" in k_lower or "r-squared" in k_lower: 
+                                            avg_metrics[mod_name]["r2"].append(val_m)
+                                        elif "mape" in k_lower: 
+                                            avg_metrics[mod_name]["mape"].append(val_m)
+
+    def safe_mean(lst):
+        return float(np.mean(lst)) if len(lst) > 0 else 0.0
+
     models = ["SVR", "Quantile Reg.", "GAM"]
-    rmse_vals = [12.5, 15.8, 13.2] # Contoh RMSE (cm)
-    mae_vals = [9.8, 11.2, 10.1]   # Contoh MAE (cm)
-    mape_vals = [8.5, 12.4, 9.3]   # Contoh MAPE (%)
-    r2_vals = [0.89, 0.75, 0.84]   # Contoh R2 (Skala 0-1)
+    rmse_vals = [safe_mean(avg_metrics["SVR"]["rmse"]), safe_mean(avg_metrics["Quantile Reg."]["rmse"]), safe_mean(avg_metrics["GAM"]["rmse"])]
+    mae_vals = [safe_mean(avg_metrics["SVR"]["mae"]), safe_mean(avg_metrics["Quantile Reg."]["mae"]), safe_mean(avg_metrics["GAM"]["mae"])]
+    mape_vals = [safe_mean(avg_metrics["SVR"]["mape"]), safe_mean(avg_metrics["Quantile Reg."]["mape"]), safe_mean(avg_metrics["GAM"]["mape"])]
+    r2_vals = [safe_mean(avg_metrics["SVR"]["r2"]), safe_mean(avg_metrics["Quantile Reg."]["r2"]), safe_mean(avg_metrics["GAM"]["r2"])]
+    # -------------------------------------------------------------------------
 
     fig_compare = go.Figure()
     
     # Trace untuk masing-masing metrik
     fig_compare.add_trace(go.Bar(x=models, y=rmse_vals, name='RMSE (Lower is Better)', marker_color='#1f77b4'))
     fig_compare.add_trace(go.Bar(x=models, y=mae_vals, name='MAE (Lower is Better)', marker_color='#ff7f0e'))
-    fig_compare.add_trace(go.Bar(x=models, y=mape_vals, name='MAPE (Lower is Better)', marker_color='#d62728'))  # Warna Merah
-    fig_compare.add_trace(go.Bar(x=models, y=r2_vals, name='R² (Higher is Better)', marker_color='#2ca02c'))   # Warna Hijau
+    fig_compare.add_trace(go.Bar(x=models, y=mape_vals, name='MAPE (Lower is Better)', marker_color='#d62728'))
+    fig_compare.add_trace(go.Bar(x=models, y=r2_vals, name='R² (Higher is Better)', marker_color='#2ca02c'))
 
     fig_compare.update_layout(
         barmode='group',
         plot_bgcolor="rgba(0,0,0,0)",
         xaxis=dict(showgrid=False),
-        yaxis=dict(showgrid=True, gridcolor='lightgray', title='Nilai Metrik Evaluasi'),
+        yaxis=dict(showgrid=True, gridcolor='lightgray', title='Nilai Metrik Evaluasi Rerata'),
         margin=dict(l=20, r=20, t=20, b=20),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
     )
