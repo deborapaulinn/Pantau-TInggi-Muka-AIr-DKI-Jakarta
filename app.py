@@ -145,50 +145,43 @@ if st.session_state.halaman == "Dashboard":
     st.markdown("Sistem informasi prediksi tinggi muka air di DKI Jakarta dalam 1–3 hari ke depan menggunakan model machine learning dan statistik lanjutan.")
     st.markdown("---")
 
-    # --- FORM INPUT ---
-    col1, col3 = st.columns([2, 2])   # col2 dihapus dulu dari sini
+    # --- FORM INPUT (Tanpa Tombol Submit) ---
+    col1, col2, col3 = st.columns([2, 1.5, 2])
 
     with col1:
         pilihan_key = st.selectbox("PINTU AIR *", options=list(pintu_air.keys()))
         lokasi = pintu_air[pilihan_key]
         batas_lokasi = ambang_batas[lokasi]
+        
+    with col2:
+        @st.cache_data
+        def get_global_date_range():
+            all_dates = []
+            for lokasi_nama in pintu_air.values():
+                bundle = load_model(lokasi_nama)
+                if bundle and "svr_results" in bundle:
+                    hasil = bundle["svr_results"]
+                    if 1 in hasil:
+                        train_d = pd.to_datetime(hasil[1]['train_index'])
+                        test_d = pd.to_datetime(hasil[1]['test_index'])
+                        all_dates.extend(train_d.tolist())
+                        all_dates.extend(test_d.tolist())
+            if all_dates:
+                return min(all_dates).date(), max(all_dates).date()
+            return datetime.date(2022, 1, 13), datetime.date(2025,6,9)# fallback
 
+        min_date, max_date = get_global_date_range()
+
+        tanggal_pilih = st.date_input(
+            "TANGGAL *", 
+            value=max_date,
+            min_value=min_date,
+            max_value=max_date,
+            help="Pilih tanggal yang ingin diprediksi 1-3 hari ke depan"
+        )
+        
     with col3:
         model_pilih = st.selectbox("MODEL PREDIKSI", options=model_list)
-
-    # --- LOAD MODEL (sebelum date_input) ---
-    model_bundle = load_model(lokasi)
-    if model_bundle is None:
-        st.error(f"⚠️ File data untuk {lokasi} tidak ditemukan.")
-        st.stop()
-
-    key_mapping = {
-        "SVR": "svr_results",
-        "Quantile Regression": "qr_results",
-        "Generalized Additive Models": "gam_results"
-    }
-    target_key = key_mapping[model_pilih]
-    if target_key not in model_bundle:
-        st.error(f"⚠️ Model {model_pilih} tidak ditemukan.")
-        st.stop()
-
-    hasil_model = model_bundle[target_key]
-
-    # --- AMBIL RENTANG TANGGAL DARI PKL ---
-    train_dates = pd.to_datetime(hasil_model[1]['train_index'])
-    test_dates  = pd.to_datetime(hasil_model[1]['test_index'])
-    all_model_dates = list(train_dates) + list(test_dates)
-    tgl_min  = min(all_model_dates).date()
-    tgl_maks = max(all_model_dates).date()
-
-    # --- DATE INPUT (sekarang tgl_maks sudah tersedia) ---
-    tanggal_pilih = st.date_input(
-        "TANGGAL *",
-        value=tgl_maks,
-        min_value=tgl_min,
-        max_value=tgl_maks,
-        help="Pilih tanggal yang ingin diprediksi 1-3 hari ke depan"
-    )
 
     # --- PEMROSESAN MODEL ---
     model_bundle = load_model(lokasi) 
