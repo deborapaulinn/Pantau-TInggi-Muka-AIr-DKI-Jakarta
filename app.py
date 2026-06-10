@@ -161,11 +161,14 @@ if st.session_state.halaman == "Dashboard":
                 bundle = load_model(lokasi_nama)
                 if bundle and "svr_results" in bundle:
                     hasil = bundle["svr_results"]
-                    if 1 in hasil:
-                        train_d = pd.to_datetime(hasil[1]['train_index'])
-                        test_d = pd.to_datetime(hasil[1]['test_index'])
-                        all_dates.extend(train_d.tolist())
-                        all_dates.extend(test_d.tolist())
+                    # Kumpulkan semua tanggal dari seluruh horizon dan tambahkan pergeseran horizonnya
+                    # Agar tanggal index yang tadinya adalah tanggal fitur, kembali menjadi tanggal aktual
+                    for h in [1, 2, 3]:
+                        if h in hasil:
+                            train_d = pd.to_datetime(hasil[h]['train_index']) + pd.Timedelta(days=h)
+                            test_d = pd.to_datetime(hasil[h]['test_index']) + pd.Timedelta(days=h)
+                            all_dates.extend(train_d.tolist())
+                            all_dates.extend(test_d.tolist())
             if all_dates:
                 return min(all_dates).date(), max(all_dates).date()
             return datetime.date(2022, 1, 13), datetime.date(2025,6,9)# fallback
@@ -238,25 +241,27 @@ if st.session_state.halaman == "Dashboard":
         pred_h3 = get_pred_value(hasil_model[3])
 
         # 3. Fungsi Cerdas Pencari Data Aktual & Prediksi Historis (SVR/GAM vs QR)
-        kunci_train = 'y_train_raw' if 'y_train_raw' in hasil_model[1] else 'y_train'
-        kunci_test = 'y_test_raw' if 'y_test_raw' in hasil_model[1] else 'y_test'
+        # Gunakan horizon terjauh (H=3) agar rentang tanggal aktual merepresentasikan akhir excel
+        h_terjauh = 3 if 3 in hasil_model else 1
+        kunci_train = 'y_train_raw' if 'y_train_raw' in hasil_model[h_terjauh] else 'y_train'
+        kunci_test = 'y_test_raw' if 'y_test_raw' in hasil_model[h_terjauh] else 'y_test'
         
-        kunci_pred_train = 'y_pred_tr' if 'y_pred_tr' in hasil_model[1] else 'pred_train'
-        kunci_pred_test = 'y_pred_te' if 'y_pred_te' in hasil_model[1] else 'pred_test'
+        kunci_pred_train = 'y_pred_tr' if 'y_pred_tr' in hasil_model[h_terjauh] else 'pred_train'
+        kunci_pred_test = 'y_pred_te' if 'y_pred_te' in hasil_model[h_terjauh] else 'pred_test'
 
-        # 4. Menggabungkan Data Historis (Train + Test)
-        train_dates = pd.to_datetime(hasil_model[1]['train_index'])
-        test_dates = pd.to_datetime(hasil_model[1]['test_index'])
+        # 4. Menggabungkan Data Historis (Train + Test) ditambah shift tanggal agar pas dengan aktual
+        train_dates = pd.to_datetime(hasil_model[h_terjauh]['train_index']) + pd.Timedelta(days=h_terjauh)
+        test_dates = pd.to_datetime(hasil_model[h_terjauh]['test_index']) + pd.Timedelta(days=h_terjauh)
         all_dates = list(train_dates) + list(test_dates)
 
         # Gabungkan Aktual
-        train_actual = get_numeric_array(hasil_model[1][kunci_train])
-        test_actual = get_numeric_array(hasil_model[1][kunci_test])
+        train_actual = get_numeric_array(hasil_model[h_terjauh][kunci_train])
+        test_actual = get_numeric_array(hasil_model[h_terjauh][kunci_test])
         all_actual = np.concatenate([train_actual, test_actual])
 
         # Gabungkan Prediksi Historis
-        train_pred = get_numeric_array(hasil_model[1][kunci_pred_train])
-        test_pred = get_numeric_array(hasil_model[1][kunci_pred_test])
+        train_pred = get_numeric_array(hasil_model[h_terjauh][kunci_pred_train])
+        test_pred = get_numeric_array(hasil_model[h_terjauh][kunci_pred_test])
         all_pred = np.concatenate([train_pred, test_pred])
 
         # 5. Filter berdasarkan Tanggal Pilihan di Kalender
@@ -279,7 +284,7 @@ if st.session_state.halaman == "Dashboard":
         # 7. Persiapan Data Akhir untuk Grafik
         dates_past = df_filtered['Tanggal'].dt.date.tolist()
         aktual_past = df_filtered['Aktual'].tolist()
-        pred_past = df_filtered['Prediksi_Historis'].tolist() # <-- Data baru untuk grafik keseluruhan
+        pred_past = df_filtered['Prediksi_Historis'].tolist() 
         
         dates_future = [
             tanggal_pilih + datetime.timedelta(days=1),
@@ -294,7 +299,6 @@ if st.session_state.halaman == "Dashboard":
 
 # --- METRICS CARDS ---
     st.markdown("<br>", unsafe_allow_html=True)
-    # Ubah menjadi 4 kolom dengan lebar proporsional
     m1, m2, m3, m4 = st.columns(4)
 
     # Memformat tanggal
@@ -307,7 +311,6 @@ if st.session_state.halaman == "Dashboard":
         st.markdown(f"<div style='font-size: 14px; color: gray; margin-bottom: -10px;'>TMA TERKINI<br><b>{tgl_terkini}</b></div>", unsafe_allow_html=True)
         st.metric(label="hidden_1", value=f"{tma_terkini} cm", delta="Aktual", label_visibility="collapsed")
         
-        # Menambahkan kembali tulisan STATUS SAAT INI di dalam alert box
         if "Normal" in status_saat_ini:
             st.success(f"**STATUS SAAT INI**\n\n{status_saat_ini}")
         elif "Siaga III" in status_saat_ini:
@@ -333,10 +336,8 @@ if st.session_state.halaman == "Dashboard":
     try:
         st.markdown("##### 📊 Evaluasi Kinerja Model")
         
-        # Membuat 3 Tab untuk metrik masing-masing hari prediksi
         tab_h1, tab_h2, tab_h3 = st.tabs(["Prediksi H+1", "Prediksi H+2", "Prediksi H+3"])
         
-        # 1. Tentukan kata kunci filter berdasarkan model yang dipilih di UI
         if model_pilih == "SVR":
             keyword_aktif = ["svr"]
         elif model_pilih == "Quantile Regression":
@@ -346,7 +347,6 @@ if st.session_state.halaman == "Dashboard":
         else:
             keyword_aktif = []
 
-        # Fungsi dinamis untuk memproses dan menampilkan metrik per hari
         def tampilkan_metrik_per_hari(hari, wadah_tab):
             metrics_data = hasil_model[hari].get('metrics', {})
             
@@ -363,10 +363,7 @@ if st.session_state.halaman == "Dashboard":
                 for k, v in flat_metrics.items():
                     k_lower = k.lower()
                     
-                    # Kata kunci yang secara default difilter
                     kata_kunci_dihapus = ["early_warn", "siaga"]
-                    
-                    # Jika model BUKAN Quantile Regression, filter out 'coverage' dan 'width'
                     if model_pilih != "Quantile Regression":
                         kata_kunci_dihapus.extend(["coverage", "width"])
                         
@@ -389,8 +386,6 @@ if st.session_state.halaman == "Dashboard":
                     if any(kw in k_lower for kw in keyword_aktif) or not is_other_model:
                         filtered_metrics[k] = v
 
-
-                # 4. Menampilkan metrik hasil filter ke dalam grid tab
                 if filtered_metrics:
                     keys = list(filtered_metrics.keys())
                     for i in range(0, len(keys), 4):
@@ -402,31 +397,23 @@ if st.session_state.halaman == "Dashboard":
                                 
                                 k_lower = str(k).lower()
                                 
-                                # --- BAGIAN FORMAT ANGKA YANG DIUBAH ---
                                 if isinstance(v, (int, float, np.floating)):
                                     if "coverage" in k_lower:
-                                        # Coverage dikali 100 dan format 2 angka di belakang koma + %
                                         val_str = f"{(v * 100):.2f}%"
                                     elif "mape" in k_lower:
-                                        # MAPE format 2 angka di belakang koma + %
                                         val_str = f"{v:.2f}%"
                                     else:
-                                        # Metrik lainnya (RMSE, MAE, R2, Interval Width) format 2 desimal
                                         val_str = f"{v:.2f}"
                                 else:
                                     val_str = str(v)
-                                # ---------------------------------------
                                     
                                 label_bersih = str(k).upper().replace("_", " ")
-                                
-                                # Menampilkan Metrik
                                 cols[j].metric(label=label_bersih, value=val_str)
                 else:
                     wadah_tab.info("Tidak ada metrik evaluasi khusus untuk model ini.")
             else:
                 wadah_tab.info(f"Data metrik untuk H+{hari} belum tersedia di dalam file.")
 
-        # Memanggil fungsi untuk merender metrik di masing-masing tab
         tampilkan_metrik_per_hari(1, tab_h1)
         tampilkan_metrik_per_hari(2, tab_h2)
         tampilkan_metrik_per_hari(3, tab_h3)
@@ -436,7 +423,6 @@ if st.session_state.halaman == "Dashboard":
         pass
 
 # --- MENCARI DATA AKTUAL MASA DEPAN (JIKA ADA) ---
-    # Filter df_history untuk mencari apakah tanggal H+1, H+2, H+3 ada di dataset asli
     df_future_actual = df_history[df_history['Tanggal_Date'].isin(dates_future)].sort_values('Tanggal')
     
     dates_actual_future = df_future_actual['Tanggal'].dt.date.tolist()
@@ -448,12 +434,10 @@ if st.session_state.halaman == "Dashboard":
 
     fig1 = go.Figure()
 
-    # Plot Garis Aktual (Batasi 60 hari terakhir agar tidak berat)
     limit_hari = 60
     plot_dates_past = dates_past[-limit_hari:]
     plot_aktual_past = aktual_past[-limit_hari:]
 
-    # Gabungkan data aktual masa lalu dengan data aktual masa depan (jika tersedia)
     plot_dates_aktual_combined = plot_dates_past + dates_actual_future
     plot_aktual_combined = plot_aktual_past + aktual_future
 
@@ -464,7 +448,6 @@ if st.session_state.halaman == "Dashboard":
         marker=dict(size=6)
     ))
 
-    # Plot Garis Prediksi
     dates_pred_full = [plot_dates_past[-1]] + dates_future
     pred_full = [plot_aktual_past[-1]] + pred_future
 
@@ -495,18 +478,15 @@ if st.session_state.halaman == "Dashboard":
 
     fig1_full = go.Figure()
 
-    # Gabungkan data aktual masa lalu keseluruhan dengan data aktual masa depan (jika tersedia)
     dates_aktual_full_combined = dates_past + dates_actual_future
     aktual_full_combined = aktual_past + aktual_future
 
-    # 1. Garis Aktual Keseluruhan (Biru)
     fig1_full.add_trace(go.Scatter(
         x=dates_aktual_full_combined, y=aktual_full_combined, 
         mode='lines', name='Aktual',
         line=dict(color='#1f77b4', width=1.5)
     ))
 
-    # 2. Garis Prediksi Keseluruhan + Sambungan 3 Hari ke Depan (Orange)
     dates_pred_total = dates_past + dates_future
     pred_total = pred_past + pred_future
 
@@ -516,7 +496,6 @@ if st.session_state.halaman == "Dashboard":
         line=dict(color='#ff7f0e', width=1.5)
     ))
 
-    # Garis Batas Status Siaga
     fig1_full.add_hline(y=batas_lokasi["siaga1"], line_dash="dash", line_color="red", annotation_text="Siaga I", annotation_position="top left")
     fig1_full.add_hline(y=batas_lokasi["siaga2"], line_dash="dash", line_color="orange", annotation_text="Siaga II", annotation_position="top left")
     fig1_full.add_hline(y=batas_lokasi["siaga3"], line_dash="dash", line_color="#e6c200", annotation_text="Siaga III", annotation_position="top left")
@@ -569,31 +548,38 @@ elif st.session_state.halaman == "Riwayat Data":
     st.markdown("Halaman ini menampilkan tabel informasi riwayat data Tinggi Muka Air (TMA) seluruh pintu air di DKI Jakarta beserta hasil visualisasi model prediksi.")
     st.markdown("---")
 
-    # --- 1. FORM INPUT (PERIODE WAKTU & MODEL PREDIKSI) ---
+    # Ambil min_date dan max_date sama seperti dashboard dengan logika offset horizon yg direvisi
+    @st.cache_data
+    def get_global_date_range_riwayat():
+        all_dates = []
+        for lokasi_nama in pintu_air.values():
+            bundle = load_model(lokasi_nama)
+            if bundle and "svr_results" in bundle:
+                hasil = bundle["svr_results"]
+                for h in [1, 2, 3]:
+                    if h in hasil:
+                        train_d = pd.to_datetime(hasil[h]['train_index']) + pd.Timedelta(days=h)
+                        test_d = pd.to_datetime(hasil[h]['test_index']) + pd.Timedelta(days=h)
+                        all_dates.extend(train_d.tolist())
+                        all_dates.extend(test_d.tolist())
+        if all_dates:
+            return min(all_dates).date(), max(all_dates).date()
+        return datetime.date(2022, 1, 13), datetime.date(2025,6,9)
+        
+    min_date, max_date = get_global_date_range_riwayat()
+
     tahun_tersedia = list(range(min_date.year, max_date.year + 1))
     opsi_periode = [f"Semua ({min_date.year}-{max_date.year})"] + [str(t) for t in tahun_tersedia]
 
     periode_pilih = st.selectbox("📅 PERIODE WAKTU", options=opsi_periode)
 
-    # Filter-nya juga perlu disesuaikan:
-    if not periode_pilih.startswith("Semua"):
-        df_all = df_all[df_all['Tahun'] == int(periode_pilih)]
-
-    # Tetapkan nilai default secara 'hidden' agar proses ekstraksi data di bawahnya tetap berjalan aman
     model_pilih_riwayat = "SVR"
 
-    # --- 2 & 3. PROSES PENGAMBILAN DATA & MENAMPILKAN TABEL ---
     st.subheader("📋 Tabel Informasi Riwayat TMA Seluruh Pintu Air")
     
-    # 💡 CATATAN UNTUK ACUAN EXCEL:
-    # Jika nanti Anda ingin membaca langsung dari file Excel gabungan, kodenya tinggal diganti seperti ini:
-    # df_all = pd.read_excel("nama_file_excel_anda.xlsx")
-    
-    # Di bawah ini adalah sistem otomatis untuk mengekstrak data historis dari file .pkl seluruh pintu air:
-    with st.spinner("Mengkstrak data seluruh pintu air..."):
+    with st.spinner("Mengekstrak data seluruh pintu air..."):
         list_df = []
         
-        # Fungsi pembongkar lokal untuk keamanan tipe data
         def ekstrak_array_lokal(data):
             if isinstance(data, pd.DataFrame):
                 for k in [0.5, '0.5', '0.50', 'median', 'q50', 0.50]:
@@ -609,21 +595,21 @@ elif st.session_state.halaman == "Riwayat Data":
             bundle = load_model(lokasi_nama)
             if bundle and "svr_results" in bundle:
                 hasil_svr = bundle["svr_results"]
-                if 1 in hasil_svr:
-                    kunci_train = 'y_train_raw' if 'y_train_raw' in hasil_svr[1] else 'y_train'
-                    kunci_test = 'y_test_raw' if 'y_test_raw' in hasil_svr[1] else 'y_test'
+                # Cerdas cari horizon terjauh buat narik semua riwayat ke tanggal aktualnya
+                h_riwayat = 3 if 3 in hasil_svr else 1
+                if h_riwayat in hasil_svr:
+                    kunci_train = 'y_train_raw' if 'y_train_raw' in hasil_svr[h_riwayat] else 'y_train'
+                    kunci_test = 'y_test_raw' if 'y_test_raw' in hasil_svr[h_riwayat] else 'y_test'
                     
-                    # Gabungkan Tanggal
-                    t_dates = pd.to_datetime(hasil_svr[1]['train_index'])
-                    te_dates = pd.to_datetime(hasil_svr[1]['test_index'])
+                    # Tambahkan pergeseran hari
+                    t_dates = pd.to_datetime(hasil_svr[h_riwayat]['train_index']) + pd.Timedelta(days=h_riwayat)
+                    te_dates = pd.to_datetime(hasil_svr[h_riwayat]['test_index']) + pd.Timedelta(days=h_riwayat)
                     all_d = list(t_dates) + list(te_dates)
                     
-                    # Gabungkan Aktual
-                    tr_act = ekstrak_array_lokal(hasil_svr[1][kunci_train])
-                    te_act = ekstrak_array_lokal(hasil_svr[1][kunci_test])
+                    tr_act = ekstrak_array_lokal(hasil_svr[h_riwayat][kunci_train])
+                    te_act = ekstrak_array_lokal(hasil_svr[h_riwayat][kunci_test])
                     all_act = np.concatenate([tr_act, te_act])
                     
-                    # Ambil Prediksi Historis Sesuai Model Pilihan Grafik
                     key_map_riwayat = {
                         "SVR": "svr_results",
                         "Quantile Regression": "qr_results",
@@ -632,14 +618,13 @@ elif st.session_state.halaman == "Riwayat Data":
                     t_key = key_map_riwayat[model_pilih_riwayat]
                     
                     pred_total = np.zeros(len(all_act))
-                    if t_key in bundle and 1 in bundle[t_key]:
-                        k_p_tr = 'y_pred_tr' if 'y_pred_tr' in bundle[t_key][1] else 'pred_train'
-                        k_p_te = 'y_pred_te' if 'y_pred_te' in bundle[t_key][1] else 'pred_test'
-                        tr_pr = ekstrak_array_lokal(bundle[t_key][1][k_p_tr])
-                        te_pr = ekstrak_array_lokal(bundle[t_key][1][k_p_te])
+                    if t_key in bundle and h_riwayat in bundle[t_key]:
+                        k_p_tr = 'y_pred_tr' if 'y_pred_tr' in bundle[t_key][h_riwayat] else 'pred_train'
+                        k_p_te = 'y_pred_te' if 'y_pred_te' in bundle[t_key][h_riwayat] else 'pred_test'
+                        tr_pr = ekstrak_array_lokal(bundle[t_key][h_riwayat][k_p_tr])
+                        te_pr = ekstrak_array_lokal(bundle[t_key][h_riwayat][k_p_te])
                         pred_total = np.concatenate([tr_pr, te_pr])
                     
-                    # Buat DataFrame per pintu air
                     df_pintu = pd.DataFrame({
                         'Tanggal': all_d,
                         'Pintu Air': lokasi_nama,
@@ -649,29 +634,23 @@ elif st.session_state.halaman == "Riwayat Data":
                     list_df.append(df_pintu)
 
         if list_df:
-            # Menggabungkan data dari seluruh pintu air menjadi satu kesatuan tabel
             df_all = pd.concat(list_df, ignore_index=True)
             df_all['Tahun'] = df_all['Tanggal'].dt.year
             
-            # Filter data berdasarkan "Periode Waktu" pilihan user
-            if periode_pilih != "Semua (2022-2025)":
+            if not periode_pilih.startswith("Semua"):
                 df_all = df_all[df_all['Tahun'] == int(periode_pilih)]
             
-            # Urutkan berdasarkan tanggal terbaru
             df_all = df_all.sort_values(by=['Tanggal', 'Pintu Air'], ascending=[False, True])
             
-            # Buat tampilan tabel ringkas untuk informasi riwayat
             df_tabel_tampil = df_all[['Tanggal', 'Pintu Air', 'TMA Aktual (cm)']].copy()
             df_tabel_tampil['Tanggal'] = df_tabel_tampil['Tanggal'].dt.strftime('%Y-%m-%d')
             
-            df_tabel_tampil.reset_index(drop=True, inplace=True)  # Hapus index yang acak
-            df_tabel_tampil.index = df_tabel_tampil.index + 1     # Mulai nomor urut dari 1 (bukan 0)
-            df_tabel_tampil.index.name = "No"                     # Beri judul 'No' pada kolom angka tersebut
+            df_tabel_tampil.reset_index(drop=True, inplace=True)
+            df_tabel_tampil.index = df_tabel_tampil.index + 1
+            df_tabel_tampil.index.name = "No"
             
-            # Tampilkan tabel ke layar Streamlit
             st.dataframe(df_tabel_tampil, use_container_width=True, height=350)
             
-            # Tombol tambahan untuk download data tabel dalam bentuk CSV/Excel-ready
             csv_data = df_tabel_tampil.to_csv(index=False).encode('utf-8')
             st.download_button(
                 label="📥 Unduh Data Riwayat (CSV)", 
@@ -686,7 +665,6 @@ elif st.session_state.halaman == "Metode Prediksi":
     st.markdown("Halaman ini menjelaskan dasar ilmiah, formulasi matematika, dan perbandingan performa dari tiga model utama yang digunakan dalam sistem ini.")
     st.markdown("---")
 
-    # --- 1. PENJELASAN TIAP MODEL (TABS) ---
     st.subheader("💡 Deskripsi Algoritma")
     tab1, tab2, tab3 = st.tabs(["Support Vector Regression", "Quantile Regression", "Generalized Additive Models"])
 
@@ -695,7 +673,6 @@ elif st.session_state.halaman == "Metode Prediksi":
         **Support Vector Regression (SVR)** adalah algoritma pembelajaran mesin berbasis kernel yang mencari sebuah *hyperplane* dalam ruang dimensi tinggi untuk melakukan regresi. 
         Keunggulan utamanya adalah kemampuan menangani data non-linear dan ketahanannya terhadap gangguan (*noise*) data.
         """)
-        # Rumus SVR dengan MathML
         st.markdown("**Formulasi Matematika:**")
         st.write(
             """<div style='background-color: #f8fafc; padding: 20px; border-radius: 10px; border: 1px solid #e2e8f0;'>
@@ -904,7 +881,6 @@ elif st.session_state.halaman == "Metode Prediksi":
             </div>""", unsafe_allow_html=True
         )
 
-    # --- 2. PERBANDINGAN MODEL (TABEL RINGKAS) ---
     st.markdown("<br>", unsafe_allow_html=True)
     st.subheader("⚖️ Perbandingan Karakteristik Model")
     
@@ -916,7 +892,6 @@ elif st.session_state.halaman == "Metode Prediksi":
     }
     st.table(pd.DataFrame(data_banding))
 
-    # --- 3. PERBANDINGAN DALAM BENTUK GRAFIK ---
     st.markdown("<br>", unsafe_allow_html=True)
     st.subheader("📊 Visualisasi Efisiensi Prediksi (Rata-rata Seluruh Pintu Air)")
     st.caption("Ilustrasi perbandingan tingkat kesalahan (error) relatif antar model berdasarkan nilai rata-rata dari pengujian seluruh titik pemantauan.")
@@ -925,9 +900,6 @@ elif st.session_state.halaman == "Metode Prediksi":
     st.caption("Mean Absolute Percentage Error (MAPE) : Metrik evaluasi yang digunakan untuk mengukur rata-rata kesalahan absolut dalam bentuk persentase antara nilai prediksi dari sebuah model dengan nilai data aktual di lapangan. Nilai MAPE yang lebih kecil menunjukkan tingkat akurasi prediksi yang lebih tinggi.")
     st.caption("Coefficient of Determination (R²) : Metrik evaluasi yang digunakan untuk mengukur seberapa baik model dapat menjelaskan variasi dalam data aktual. Nilai R² yang lebih tinggi menunjukkan tingkat akurasi prediksi yang lebih tinggi.")
     
-    # -------------------------------------------------------------------------
-    # PENGAMBILAN METRIK EVALUASI AKTUAL
-    # -------------------------------------------------------------------------
     avg_metrics = {
         "SVR": {"rmse": [], "mae": [], "mape": [], "r2": []},
         "Quantile Reg.": {"rmse": [], "mae": [], "mape": [], "r2": []},
@@ -978,11 +950,9 @@ elif st.session_state.halaman == "Metode Prediksi":
     mae_vals = [safe_mean(avg_metrics["SVR"]["mae"]), safe_mean(avg_metrics["Quantile Reg."]["mae"]), safe_mean(avg_metrics["GAM"]["mae"])]
     mape_vals = [safe_mean(avg_metrics["SVR"]["mape"]), safe_mean(avg_metrics["Quantile Reg."]["mape"]), safe_mean(avg_metrics["GAM"]["mape"])]
     r2_vals = [safe_mean(avg_metrics["SVR"]["r2"]), safe_mean(avg_metrics["Quantile Reg."]["r2"]), safe_mean(avg_metrics["GAM"]["r2"])]
-    # -------------------------------------------------------------------------
 
     fig_compare = go.Figure()
     
-    # Trace untuk masing-masing metrik
     fig_compare.add_trace(go.Bar(x=models, y=rmse_vals, name='RMSE (Lower is Better)', marker_color='#1f77b4'))
     fig_compare.add_trace(go.Bar(x=models, y=mae_vals, name='MAE (Lower is Better)', marker_color='#ff7f0e'))
     fig_compare.add_trace(go.Bar(x=models, y=mape_vals, name='MAPE (Lower is Better)', marker_color='#d62728'))
@@ -1006,7 +976,6 @@ elif st.session_state.halaman == "Panduan Mitigasi":
     st.markdown("Berikut adalah Standar Operasional Prosedur (SOP) dan langkah-langkah pencegahan yang harus dilakukan masyarakat berdasarkan status peringatan dini Tinggi Muka Air (TMA).")
     st.markdown("---")
 
-    # --- STATUS NORMAL (BIRU) ---
     st.success("""
     ### 🔵 Status Normal
     **Kondisi:** Tinggi air berada di batas aman. Tidak ada potensi banjir dalam waktu dekat.
@@ -1017,7 +986,6 @@ elif st.session_state.halaman == "Panduan Mitigasi":
     * **Update Informasi:** Tetap pantau prakiraan cuaca dari BMKG dan informasi TMA melalui dashboard ini secara berkala.
     """)
 
-    # --- SIAGA III (KUNING) ---
     st.info("""
     ### 🟡 Siaga III (Waspada)
     **Kondisi:** Debit air mulai meningkat. Terdapat potensi genangan di area dataran rendah atau pemukiman bantaran sungai.
@@ -1028,7 +996,6 @@ elif st.session_state.halaman == "Panduan Mitigasi":
     * **Persiapan Logistik:** Pastikan ketersediaan bahan makanan darurat, air bersih, dan obat-obatan pribadi.
     """)
 
-    # --- SIAGA II (ORANYE) ---
     st.warning("""
     ### 🟠 Siaga II (Siaga)
     **Kondisi:** Kenaikan air semakin signifikan dan cepat. Banjir kemungkinan besar akan segera melanda beberapa wilayah.
@@ -1040,7 +1007,6 @@ elif st.session_state.halaman == "Panduan Mitigasi":
     * **Prioritas Evakuasi:** Lansia, anak-anak, ibu hamil, dan orang sakit disarankan untuk dievakuasi lebih awal ke tempat aman.
     """)
 
-    # --- SIAGA I (MERAH) ---
     st.error("""
     ### 🔴 Siaga I (Bahaya)
     **Kondisi:** Air telah melewati ambang batas kritis. Banjir besar sedang atau akan segera terjadi. Waktu evakuasi sangat singkat.
@@ -1052,7 +1018,6 @@ elif st.session_state.halaman == "Panduan Mitigasi":
     * **Hindari Area Bahaya:** Jauhi tiang listrik, gardu listrik, dan pohon besar yang rawan tumbang.
     """)
 
-    # --- TIPS TAMBAHAN: TAS SIAGA BENCANA ---
     st.markdown("---")
     st.markdown("### 🎒 Persiapan Tas Siaga Bencana (Penting!)")
     st.markdown("Siapkan satu tas ransel khusus yang mudah dibawa dan simpan di tempat yang mudah dijangkau. Isi tas tersebut dengan:")
@@ -1077,61 +1042,55 @@ elif st.session_state.halaman == "Peta Lokasi":
     st.markdown("Pemetaan geografis 12 titik stasiun pemantau Tinggi Muka Air (TMA) yang terintegrasi dalam sistem prediksi ini.")
     st.markdown("---")
 
-    # Daftar koordinat (Sudah diperbaiki format minusnya pada pos 10)
     data_koordinat = [
-        [-6.633529, 106.837175],  # 1. Bendung Katulampa
-        [-6.402000, 106.821000],  # 2. Manggarai BKB
-        [-6.208100, 106.850700],  # 3. Pos Depok
-        [-6.196500, 106.815500],  # 4. PA Karet
-        [-6.264920, 106.480140],  # 5. Pos Krukut Hulu
-        [-6.289100, 106.812200],  # 6. Pos Pesanggrahan
-        [-6.171714, 106.726583],  # 7. Pos Angke Hulu
-        [-6.117390, 106.799908],  # 8. Waduk Pluit
-        [-6.126467, 106.809449],  # 9. Pasar Ikan Laut
-        [-6.231756, 106.877533],  # 10. Pos Cipinang Hulu
-        [-6.162942, 106.881303],  # 11. Pos Sunter Hulu
-        [-6.190928, 106.904321]   # 12. Pulo Gadung
+        [-6.633529, 106.837175],  
+        [-6.402000, 106.821000],  
+        [-6.208100, 106.850700],  
+        [-6.196500, 106.815500],  
+        [-6.264920, 106.480140],  
+        [-6.289100, 106.812200],  
+        [-6.171714, 106.726583],  
+        [-6.117390, 106.799908],  
+        [-6.126467, 106.809449],  
+        [-6.231756, 106.877533],  
+        [-6.162942, 106.881303],  
+        [-6.190928, 106.904321]   
     ]
 
-    # Menggabungkan nama pintu air dengan koordinatnya
     df_peta = pd.DataFrame({
         'Nama Pintu Air': list(pintu_air.keys()),
         'Latitude': [x[0] for x in data_koordinat],
         'Longitude': [x[1] for x in data_koordinat]
     })
 
-    # Membuat visualisasi Peta Interaktif menggunakan Plotly Mapbox
     fig_map = go.Figure(go.Scattermapbox(
         lat=df_peta['Latitude'],
         lon=df_peta['Longitude'],
         mode='markers',
         marker=go.scattermapbox.Marker(
             size=14,
-            color='#d62728',  # Warna merah agar mencolok
+            color='#d62728',  
             opacity=0.8
         ),
-        text=df_peta['Nama Pintu Air'], # Teks yang muncul saat titik disentuh
+        text=df_peta['Nama Pintu Air'], 
         hoverinfo='text'
     ))
 
-    # Menggunakan gaya peta OpenStreetMap (Gratis & tidak butuh API Key)
     fig_map.update_layout(
         mapbox_style="open-street-map",
         mapbox=dict(
-            center=dict(lat=-6.25, lon=106.8), # Titik tengah peta saat pertama kali dimuat
-            zoom=9 # Tingkat perbesaran awal
+            center=dict(lat=-6.25, lon=106.8), 
+            zoom=9 
         ),
-        margin={"r":0,"t":0,"l":0,"b":0}, # Menghilangkan jarak tepi putih
-        height=550 # Tinggi peta di layar
+        margin={"r":0,"t":0,"l":0,"b":0}, 
+        height=550 
     )
 
     st.plotly_chart(fig_map, use_container_width=True)
 
-    # Tabel ringkas di bawah peta untuk referensi kordinat
     st.markdown("<br>", unsafe_allow_html=True)
     st.subheader("📌 Referensi Koordinat Geografis")
     
-    # Merapikan index tabel agar dimulai dari angka 1
     df_peta.index = df_peta.index + 1
     df_peta.index.name = "No"
     
