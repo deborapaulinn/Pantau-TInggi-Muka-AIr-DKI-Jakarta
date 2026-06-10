@@ -168,17 +168,25 @@ if st.session_state.halaman == "Dashboard":
                         all_dates.extend(test_d.tolist())
             if all_dates:
                 return min(all_dates).date(), max(all_dates).date()
-            return datetime.date(2022, 1, 13), datetime.date(2025, 12, 31)  # fallback
+            return datetime.date(2022, 1, 13), datetime.date(2025,6,9)# fallback
 
         min_date, max_date = get_global_date_range()
 
-        tanggal_pilih = st.date_input(
-            "TANGGAL *", 
-            value=max_date,
-            min_value=min_date,
-            max_value=max_date,
-            help="Pilih tanggal yang ingin diprediksi 1-3 hari ke depan"
-        )
+        train_dates = pd.to_datetime(hasil_model[1]['train_index'])
+    
+    test_dates  = pd.to_datetime(hasil_model[1]['test_index'])
+    all_model_dates = list(train_dates) + list(test_dates)
+
+    tgl_min  = min(all_model_dates).date()
+    tgl_maks = max(all_model_dates).date()
+
+    tanggal_pilih = st.date_input(
+        "TANGGAL *",
+        value=tgl_maks,          # ← otomatis ke data terakhir
+        min_value=tgl_min,
+        max_value=tgl_maks,
+        help="Pilih tanggal yang ingin diprediksi 1-3 hari ke depan"
+    )
         
     with col3:
         model_pilih = st.selectbox("MODEL PREDIKSI", options=model_list)
