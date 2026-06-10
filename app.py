@@ -154,11 +154,29 @@ if st.session_state.halaman == "Dashboard":
         batas_lokasi = ambang_batas[lokasi]
         
     with col2:
+        @st.cache_data
+        def get_global_date_range():
+            all_dates = []
+            for lokasi_nama in pintu_air.values():
+                bundle = load_model(lokasi_nama)
+                if bundle and "svr_results" in bundle:
+                    hasil = bundle["svr_results"]
+                    if 1 in hasil:
+                        train_d = pd.to_datetime(hasil[1]['train_index'])
+                        test_d = pd.to_datetime(hasil[1]['test_index'])
+                        all_dates.extend(train_d.tolist())
+                        all_dates.extend(test_d.tolist())
+            if all_dates:
+                return min(all_dates).date(), max(all_dates).date()
+            return datetime.date(2022, 1, 13), datetime.date(2025, 12, 31)  # fallback
+
+        min_date, max_date = get_global_date_range()
+
         tanggal_pilih = st.date_input(
             "TANGGAL *", 
-            value=datetime.date(2025, 12, 3),
-            min_value=datetime.date(2022, 1, 13), 
-            max_value=datetime.date(2025, 12, 31),
+            value=max_date,
+            min_value=min_date,
+            max_value=max_date,
             help="Pilih tanggal yang ingin diprediksi 1-3 hari ke depan"
         )
         
@@ -552,10 +570,14 @@ elif st.session_state.halaman == "Riwayat Data":
     st.markdown("---")
 
     # --- 1. FORM INPUT (PERIODE WAKTU & MODEL PREDIKSI) ---
-    periode_pilih = st.selectbox(
-        "📅 PERIODE WAKTU", 
-        options=["Semua (2022-2025)", "2022", "2023", "2024", "2025"]
-    )
+    tahun_tersedia = list(range(min_date.year, max_date.year + 1))
+    opsi_periode = [f"Semua ({min_date.year}-{max_date.year})"] + [str(t) for t in tahun_tersedia]
+
+    periode_pilih = st.selectbox("📅 PERIODE WAKTU", options=opsi_periode)
+
+    # Filter-nya juga perlu disesuaikan:
+    if not periode_pilih.startswith("Semua"):
+        df_all = df_all[df_all['Tahun'] == int(periode_pilih)]
 
     # Tetapkan nilai default secara 'hidden' agar proses ekstraksi data di bawahnya tetap berjalan aman
     model_pilih_riwayat = "SVR"
