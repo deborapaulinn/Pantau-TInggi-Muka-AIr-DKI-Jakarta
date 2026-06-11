@@ -549,7 +549,7 @@ elif st.session_state.halaman == "Riwayat Data":
     st.markdown("---")
 
     # Ambil min_date dan max_date sama seperti dashboard dengan logika offset horizon yg direvisi
-    @st.cache_data
+    @st.cache_data(ttl=3600)
     def get_global_date_range_riwayat():
         all_dates = []
         for lokasi_nama in pintu_air.values():
