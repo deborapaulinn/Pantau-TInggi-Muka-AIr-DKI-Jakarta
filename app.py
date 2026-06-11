@@ -171,7 +171,7 @@ if st.session_state.halaman == "Dashboard":
                             all_dates.extend(test_d.tolist())
             if all_dates:
                 return min(all_dates).date(), max(all_dates).date()
-            return datetime.date(2022, 1, 13), datetime.date(2025,6,9)# fallback
+            return datetime.date(2022, 1, 13), datetime.date(2026,6,11)# fallback
 
         min_date, max_date = get_global_date_range()
 
@@ -471,7 +471,7 @@ if st.session_state.halaman == "Dashboard":
     )
     st.plotly_chart(fig1, use_container_width=True)
 
-    # --- GRAFIK 1B: PREDIKSI VS AKTUAL SELURUH TANGGAL (2022-2025) ---
+    # --- GRAFIK 1B: PREDIKSI VS AKTUAL SELURUH TANGGAL (2022-2026) ---
     st.markdown("<br>", unsafe_allow_html=True)
     st.subheader(f"Grafik Historis Keseluruhan Prediksi vs Aktual ({lokasi})")
     st.caption(f"Satuan: cm — Model: {model_pilih} | Menampilkan dua garis utuh perbandingan data aktual dan hasil prediksi")
@@ -564,7 +564,7 @@ elif st.session_state.halaman == "Riwayat Data":
                         all_dates.extend(test_d.tolist())
         if all_dates:
             return min(all_dates).date(), max(all_dates).date()
-        return datetime.date(2022, 1, 13), datetime.date(2025,6,9)
+        return datetime.date(2022, 1, 13), datetime.date(2026,6,11)
         
     min_date, max_date = get_global_date_range_riwayat()
 
